@@ -1,0 +1,61 @@
+{
+  "version": "1",
+  "port": "3004",
+  "slack_webhooks": {
+    "general": {
+        "url": "https://hooks.slack.com/services/xxxx",
+        "show_details": {
+            "amber": false,
+            "red": false
+        }
+    },
+	"dev": {
+		"url": "https://hooks.slack.com/services/xxx",
+		"show_details": {
+			"amber": false,
+			"red": false
+		}
+	}
+  },
+  "prometheus_url": "https://prometheus.local",
+  "scrapper_minutes": 1,
+  "notification_levels": [
+	  {
+  		  "color": "green",
+		  "emoji": "large_green_circle",
+		  "slack_webhooks": [
+			  "general"
+		  ]
+	  },
+      {
+          "color": "amber",
+          "emoji": "large_yellow_circle",
+          "slack_webhooks": [
+              "general",
+			  "dev"
+          ],
+          "metrics": [
+              {
+                  "display_name": "App LB Avg Resp Time",
+                  "query": "aws_applicationelb_target_response_time_average{load_balancer=\"app/live-frontend/xxx\"}",
+                  "threshold": "0.04"
+              }
+          ]
+      },
+      {
+          "color": "red",
+          "emoji": "large_red_square",
+          "slack_webhooks": [
+              "general",
+			  "dev"
+          ],
+          "metrics": [
+              {
+                  "display_name": "App LB Avg Resp Time",
+                  "query": "aws_applicationelb_target_response_time_average{load_balancer=\"app/live-frontend/xxx\"}",
+                  "threshold": "0.09"
+              }
+          ]
+      }
+  ]
+}

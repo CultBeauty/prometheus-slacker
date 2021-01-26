@@ -130,7 +130,7 @@
             "type": "section",
             "text": {
               "type": "mrkdwn",
-              "text": ":large_red_square: ACHTUNG! ВНИМАНИЕ! Actions needed now! Some systems are seriously degradated!"
+              "text": ":large_red_square: ACHTUNG! ВНИМАНИЕ! Actions needed now! Some systems are responding way too slow!"
             }
           }
         ],

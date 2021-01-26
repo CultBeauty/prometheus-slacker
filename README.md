@@ -72,15 +72,15 @@ every Slack webhook can receive a message with or without `detail_blocks` or
 
 The idea behind such split is that the first required "blocks" contain general
 status information, "detail blocks" contain metrics with their values and
-threshold and finally "action blocks" contain buttons (eg. that open Grafana
+thresholds and finally "action blocks" contain buttons (eg. that open Grafana
 dashboard). Now, you might want to send all the details to devops channel but
 when sending message to other people in the company you can skip the metric
 values (details) and additional action buttons/links.
 
 Following `config-sample.json`, this is how `slack_message` section can look
-like. Note that in `detail_blocks`, `text` contains Go template with `.Metrics`
-which contains metric with its `DisplayName`, `LastValue` and `Threshold` for
-that notification level.
+like. Notice that in `detail_blocks`, the `text` value uses Go template with
+`.Metrics` which contains list of metrics with its `DisplayName`, `LastValue`
+and `Threshold` (for that notification level).
 
 ```
 "slack_message": {

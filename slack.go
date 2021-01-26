@@ -14,24 +14,50 @@ const ColorWarn = "#FFD700"    // Gold
 const ColorError = "#DC143C"   // Crimson
 
 type SlackMessage struct {
-	Attachments []SlackAttachment `json:"attachments"`
+	Blocks       []SlackBlock `json:"blocks"`
+	DetailBlocks []SlackBlock `json:"detail_blocks,omitempty"`
+	ActionBlocks []SlackBlock `json:"action_blocks,omitempty"`
 }
 
-type SlackAttachment struct {
-	Fallback string       `json:"fallback"`
-	Color    string       `json:"color"`
-	Fields   []SlackField `json:"fields"`
+type SlackBlock struct {
+	Type      string               `json:"type"`
+	Text      *SlackBlockText      `json:"text,omitempty"`
+	Accessory *SlackBlockAccessory `json:"accessory,omitempty"`
+	Elements  []SlackBlockElement  `json:"elements,omitempty"`
 }
 
-type SlackField struct {
-	Title string `json:"title"`
-	Value string `json:"value"`
-	Short bool   `json:"short"`
+type SlackBlockText struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+type SlackBlockAccessory struct {
+	Type     string                `json:"type"`
+	ImageURL string                `json:"image_url,omitempty"`
+	AltText  string                `json:"alt_text,omitempty"`
+	Text     SlackBlockElementText `json:"text"`
+	URL      string                `json:"url,omitempty"`
+	ActionID string                `json:"action_id,omitempty"`
+	Value    string                `json:"value,omitempty"`
+}
+
+type SlackBlockElement struct {
+	Type  string                `json:"type"`
+	Text  SlackBlockElementText `json:"text"`
+	Value string                `json:"value"`
+	URL   string                `json:"url"`
+}
+
+type SlackBlockElementText struct {
+	Type  string `json:"type"`
+	Text  string `json:"text"`
+	Emoji bool   `json:"emoji"`
 }
 
 type SlackWebhook struct {
 	Url         string          `json:"url"`
 	ShowDetails map[string]bool `json:"show_details"`
+	ShowActions map[string]bool `json:"show_actions"`
 }
 
 func (n *SlackWebhook) SendMessage(msg SlackMessage) error {
@@ -41,7 +67,7 @@ func (n *SlackWebhook) SendMessage(msg SlackMessage) error {
 	if err != nil {
 		return errors.New("Failed to marshal Slack message: " + err.Error())
 	}
-
+	log.Print(string(payload))
 	res, err := http.Post(n.Url, "application/json", bytes.NewBuffer(payload))
 	if err != nil {
 		return errors.New("Failed to send Slack message - got error: " + err.Error())

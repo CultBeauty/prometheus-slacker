@@ -12,6 +12,7 @@ type Config struct {
 	PrometheusURL      string                  `json:"prometheus_url"`
 	ScrapperMinutes    int                     `json:"scrapper_minutes"`
 	NotificationLevels []NotificationLevel     `json:"notification_levels"`
+	Metrics            map[string]Metric       `json:"metrics"`
 }
 
 func (c *Config) SetFromJSON(b []byte) {
@@ -22,14 +23,15 @@ func (c *Config) SetFromJSON(b []byte) {
 }
 
 type NotificationLevel struct {
-	Color         string   `json:"color"`
-	Emoji         string   `json:"emoji"`
-	SlackWebhooks []string `json:"slack_webhooks"`
-	Metrics       []Metric `json:"metrics"`
+	Color           string            `json:"color"`
+	SlackWebhooks   []string          `json:"slack_webhooks"`
+	SlackMessage    SlackMessage      `json:"slack_message"`
+	LeverageMetrics map[string]string `json:"leverage_metrics"`
 }
 
 type Metric struct {
 	DisplayName string `json:"display_name"`
 	Query       string `json:"query"`
 	Threshold   string `json:"threshold"`
+	LastValue   string `json:"last_value"`
 }

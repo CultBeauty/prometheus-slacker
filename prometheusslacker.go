@@ -1,16 +1,18 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/mux"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
+	"text/template"
 	"time"
-	"net/url"
 )
 
 type PrometheusSlacker struct {
@@ -52,74 +54,139 @@ func (ps *PrometheusSlacker) startHttpd() {
 	<-done
 }
 
-func (ps *PrometheusSlacker) startScrapper() {
+func (ps PrometheusSlacker) getDelay() int {
 	delay := ps.config.ScrapperMinutes
-	log.Print(fmt.Sprintf("Starting scrapper to check every %d minutes...", delay))
 	if delay < 1 {
 		delay = 1
 	}
-	for {
-		currentLevel := ""
-		for i, notificationLevel := range ps.config.NotificationLevels {
-			color := notificationLevel.Color
+	return delay
+}
 
-			if len(notificationLevel.Metrics) == 0 && i == 0 {
-				currentLevel = color
-			}
+func (ps PrometheusSlacker) sleep() {
+	log.Print(fmt.Sprintf("Sleeping %d minutes...", ps.getDelay()))
+	time.Sleep(time.Minute * time.Duration(ps.getDelay()))
+}
 
-			for _, metric := range notificationLevel.Metrics {
-				c, err := ps.GetMetricValue(metric.Query)
-				if err != nil {
-					log.Print(fmt.Sprintf("Error getting metric value for %s", metric.Query))
-					break
-				}
+func (ps PrometheusSlacker) sendMsg(webhook SlackWebhook, msg SlackMessage) {
+	err := webhook.SendMessage(msg)
+	if err != nil {
+		log.Print("Error sending slack msg")
+	}
+}
 
-				leverage, err := ps.IsValueBiggerThanThreshold(c, metric.Threshold)
-				if err != nil {
-					log.Print(err.Error())
-					break
-				}
-				if leverage {
-					log.Print(fmt.Sprintf("%f <= %f so changing color to %s", metric.Threshold, c, color))
-					currentLevel = color
-					break
-				}
-			}
+func (ps *PrometheusSlacker) getMetricValueAndCompareWithThreshold(metric string, threshold string) (Metric, bool, error) {
+	levelMetric := ps.config.Metrics[metric]
+	query := ps.config.Metrics[metric].Query
 
-			log.Print(fmt.Sprintf("Current color is: %s\n", currentLevel))
+	c, err := ps.GetMetricValue(query)
+	if err != nil {
+		levelMetric.LastValue = "-1"
+		log.Print(fmt.Sprintf("Error getting metric value for %s", query))
+		return levelMetric, false, err
+	}
+
+	levelMetric.LastValue = c
+	levelMetric.Threshold = threshold
+
+	leverage, err := ps.IsValueBiggerThanThreshold(c, threshold)
+	if err != nil {
+		log.Print(err.Error())
+		return levelMetric, false, err
+	}
+
+	return levelMetric, leverage, nil
+}
+
+func (ps *PrometheusSlacker) getCurrentLevelAndMetrics() (int, map[int]map[string]Metric) {
+	currentLevel := -1
+	levelMetrics := make(map[int]map[string]Metric)
+	for i, notificationLevel := range ps.config.NotificationLevels {
+		color := notificationLevel.Color
+		levelMetrics[i] = make(map[string]Metric)
+
+		if len(notificationLevel.LeverageMetrics) == 0 && i == 0 {
+			currentLevel = i
 		}
-		if currentLevel != "" {
-			for _, notificationLevel := range ps.config.NotificationLevels {
-				if notificationLevel.Color == currentLevel {
-					log.Print(notificationLevel.SlackWebhooks)
-					for _, w := range notificationLevel.SlackWebhooks {
-						webhook := ps.config.SlackWebhooks[w]
-						msg := SlackMessage{
-							Attachments: []SlackAttachment{
-								SlackAttachment{
-									Color: currentLevel,
-									Fields: []SlackField{
-										SlackField{
-											Title: fmt.Sprintf("Color: %s", currentLevel),
-											Value: "",
-											Short: false,
-										},
-									},
-								},
-							},
-						}
-						log.Print(msg)
-						err := webhook.SendMessage(msg)
-						if err != nil {
-							log.Print("Error sending slack msg")
-						}
+
+		for metric, threshold := range notificationLevel.LeverageMetrics {
+			levelMetric, leverage, err := ps.getMetricValueAndCompareWithThreshold(metric, threshold)
+			if err != nil {
+				log.Print(err.Error())
+				break
+			}
+			if leverage {
+				levelMetrics[i][metric] = levelMetric
+				log.Print(fmt.Sprintf("%f <= %f so changing color to %s", threshold, levelMetric.LastValue, color))
+				currentLevel = i
+			}
+		}
+
+		log.Print(fmt.Sprintf("Current color is: %s\n", currentLevel))
+	}
+	return currentLevel, levelMetrics
+}
+
+func (ps *PrometheusSlacker) getWebhookAndMsgForNotificationLevelSlackWebhooks(notificationLevel NotificationLevel, w string, levelMetrics map[string]Metric) (SlackWebhook, SlackMessage) {
+	webhook := ps.config.SlackWebhooks[w]
+	msg := notificationLevel.SlackMessage
+	if webhook.ShowDetails[notificationLevel.Color] == true {
+		metrics := make([]Metric, 0)
+		if len(levelMetrics) > 0 {
+			for _, metric := range levelMetrics {
+				metrics = append(metrics, metric)
+			}
+		}
+
+		for _, block := range msg.DetailBlocks {
+			blockCopy := block
+			if blockCopy.Type == "section" && blockCopy.Text.Type == "mrkdwn" {
+				tmpl, err := template.New("metrics").Parse(blockCopy.Text.Text)
+				var tpl bytes.Buffer
+				if err == nil {
+					err = tmpl.Execute(&tpl, struct {
+						Metrics *([]Metric)
+					}{
+						Metrics: &metrics,
+					})
+					if err == nil {
+						blockCopy.Text.Text = tpl.String()
 					}
 				}
 			}
+			msg.Blocks = append(msg.Blocks, blockCopy)
+		}
+	}
+	if webhook.ShowActions[notificationLevel.Color] == true {
+		for _, block := range msg.ActionBlocks {
+			blockCopy := block
+			msg.Blocks = append(msg.Blocks, blockCopy)
+		}
+	}
+	return webhook, msg
+}
+
+func (ps *PrometheusSlacker) startScrapper() {
+	for {
+		currentLevel, levelMetrics := ps.getCurrentLevelAndMetrics()
+
+		if currentLevel < 0 {
+			ps.sleep()
+			continue
 		}
 
-		log.Print(fmt.Sprintf("Sleeping %d minutes...", delay))
-		time.Sleep(time.Minute * time.Duration(delay))
+		for i, notificationLevel := range ps.config.NotificationLevels {
+			if i != currentLevel {
+				continue
+			}
+
+			for _, w := range notificationLevel.SlackWebhooks {
+				webhook, msg := ps.getWebhookAndMsgForNotificationLevelSlackWebhooks(notificationLevel, w, levelMetrics[i])
+				ps.sendMsg(webhook, msg)
+			}
+		}
+
+		ps.sleep()
+		continue
 	}
 }
 

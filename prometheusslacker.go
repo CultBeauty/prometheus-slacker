@@ -36,7 +36,7 @@ func (ps *PrometheusSlacker) Init(p string) {
 
 func (ps *PrometheusSlacker) Run() int {
 	if len(os.Args) < 2 {
-		fmt.Fprintf(os.Stderr, "Syntax: prometheusslacker <config.json path>\n")
+		fmt.Fprintf(os.Stderr, "Syntax: prometheus-slacker <config.json path>\n")
 		os.Exit(1)
 	}
 	ps.Init(os.Args[1])

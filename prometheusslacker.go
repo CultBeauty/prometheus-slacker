@@ -123,7 +123,7 @@ func (ps *PrometheusSlacker) getCurrentLevelAndMetrics(metricsWithValues map[str
 		thresholdExceededMetrics := make(map[string]bool)
 		leverageMetrics := make(map[string]bool)
 
-		if len(notificationLevel.LeverageMetrics) == 0 && i == 0 {
+		if i == 0 {
 			currentLevel = i
 		}
 

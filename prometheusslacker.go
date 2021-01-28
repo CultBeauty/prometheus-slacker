@@ -36,7 +36,7 @@ func (ps *PrometheusSlacker) Init(p string) {
 
 func (ps *PrometheusSlacker) Run() int {
 	if len(os.Args) < 2 {
-		fmt.Fprintf(os.Stderr, "Syntax: prometheusslacker <config.json path>\n")
+		fmt.Fprintf(os.Stderr, "Syntax: prometheus-slacker <config.json path>\n")
 		os.Exit(1)
 	}
 	ps.Init(os.Args[1])
@@ -97,28 +97,63 @@ func (ps *PrometheusSlacker) getMetricValueAndCompareWithThreshold(metric string
 	return levelMetric, leverage, nil
 }
 
-func (ps *PrometheusSlacker) getCurrentLevelAndMetrics() (int, map[int]map[string]Metric) {
+func (ps *PrometheusSlacker) getMetricValues() map[string]Metric {
+	v := make(map[string]Metric)
+	for name, metric := range ps.config.Metrics {
+		newMetric := metric
+		c, err := ps.GetMetricValue(newMetric.Query)
+		if err == nil {
+			newMetric.LastValue = c
+		} else {
+			newMetric.LastValue = ""
+		}
+		v[name] = newMetric
+	}
+	return v
+}
+
+func (ps *PrometheusSlacker) getCurrentLevelAndMetrics(metricsWithValues map[string]Metric) (int, map[int]map[string]Metric) {
 	currentLevel := -1
 	levelMetrics := make(map[int]map[string]Metric)
 	for i, notificationLevel := range ps.config.NotificationLevels {
 		color := notificationLevel.Color
+
 		levelMetrics[i] = make(map[string]Metric)
+		metricThresholds := make(map[string]string)
+		thresholdExceededMetrics := make(map[string]bool)
+		leverageMetrics := make(map[string]bool)
 
 		if len(notificationLevel.LeverageMetrics) == 0 && i == 0 {
 			currentLevel = i
 		}
 
 		for metric, threshold := range notificationLevel.LeverageMetrics {
-			levelMetric, leverage, err := ps.getMetricValueAndCompareWithThreshold(metric, threshold)
+			metricThresholds[metric] = threshold
+			leverageMetrics[metric] = true
+			leverage, err := ps.IsValueBiggerThanThreshold(metricsWithValues[metric].LastValue, threshold)
 			if err != nil {
-				log.Print(err.Error())
-				break
+				log.Print(fmt.Errorf("Error with comparing values: %w", err.Error()))
+				continue
 			}
 			if leverage {
-				levelMetrics[i][metric] = levelMetric
-				log.Print(fmt.Sprintf("%f <= %f so changing color to %s", threshold, levelMetric.LastValue, color))
+				thresholdExceededMetrics[metric] = true
+				log.Print(fmt.Sprintf("%f <= %f so changing color to %s", threshold, metricsWithValues[metric].LastValue, color))
 				currentLevel = i
 			}
+		}
+
+		for name, metric := range metricsWithValues {
+			newMetric := metric
+			if leverageMetrics[name] == true {
+				newMetric.Leverage = true
+			}
+			if metricThresholds[name] != "" {
+				newMetric.Threshold = metricThresholds[name]
+			}
+			if thresholdExceededMetrics[name] == true {
+				newMetric.ThresholdExceeded = true
+			}
+			levelMetrics[i][name] = newMetric
 		}
 
 		log.Print(fmt.Sprintf("Current color is: %s\n", currentLevel))
@@ -167,7 +202,13 @@ func (ps *PrometheusSlacker) getWebhookAndMsgForNotificationLevelSlackWebhooks(n
 
 func (ps *PrometheusSlacker) startScrapper() {
 	for {
-		currentLevel, levelMetrics := ps.getCurrentLevelAndMetrics()
+		metricsWithValues := ps.getMetricValues()
+		if metricsWithValues == nil || len(metricsWithValues) == 0 {
+			ps.sleep()
+			continue
+		}
+
+		currentLevel, levelMetrics := ps.getCurrentLevelAndMetrics(metricsWithValues)
 
 		if currentLevel < 0 {
 			ps.sleep()

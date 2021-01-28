@@ -79,8 +79,11 @@ values (details) and additional action buttons/links.
 
 Following `config-sample.json`, this is how `slack_message` section can look
 like. Notice that in `detail_blocks`, the `text` value uses Go template with
-`.Metrics` which contains list of metrics with its `DisplayName`, `LastValue`
-and `Threshold` (for that notification level).
+`.Metrics` which contains list of metrics with its `DisplayName`, `LastValue`,
+`Threshold` (for that notification level), `ThresholdExceeded` and `Leverage`
+values. Last two are booleans and `ThresholdExceeded` is self-explanatory and
+`Leverage` means that the metric leverages to current notification level (but
+this happened when `ThresholdExceeded` is true).
 
 ```
 "slack_message": {
@@ -101,7 +104,21 @@ and `Threshold` (for that notification level).
 	  "type": "section",
 	  "text": {
 		"type": "mrkdwn",
-		"text": "{{ range .Metrics }}{{ .DisplayName }} {{ .LastValue }} > *{{ .Threshold }}*\n{{ end }}"
+		"text": "*Threshold exceeded metrics:*\n{{ range .Metrics }}{{ if and .Leverage .ThresholdExceeded }}{{ .DisplayName }} {{ .LastValue }} > *{{ .Threshold }}*\n{{ end }}{{ end }}"
+	  }
+	},
+	{
+	  "type": "section",
+	  "text": {
+		"type": "mrkdwn",
+		"text": "*Other leverage metrics:*\n{{ range .Metrics }}{{ if and .Leverage (not .ThresholdExceeded) }}{{ .DisplayName }} {{ .LastValue }} < *{{ .Threshold }}*\n{{ end }}{{ end }}"
+	  }
+	},
+	{
+	  "type": "section",
+	  "text": {
+		"type": "mrkdwn",
+		"text": "*Rest of metrics:*\n{{ range .Metrics }}{{ if not .Leverage }}{{ .DisplayName }} {{ .LastValue }}\n{{ end }}{{ end }}"
 	  }
 	}
   ],
@@ -164,6 +181,6 @@ Here is an example of webhooks definition. Notice `show_details` and
 ```
 
 ### Building and running
-To compile the code just run `go build -o prometheusslacker *.go`.
+To compile the code just run `go build -o prometheus-slacker *.go`.
 
 Alternatively, to run straight away: `go run *.go ./config.json`

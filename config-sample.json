@@ -5,10 +5,12 @@
     "general": {
       "url": "https://hooks.slack.com/services/hook1",
       "show_details": {
+		"green": false,
         "amber": false,
         "red": false
       },
       "show_actions": {
+		"green": false,
         "amber": false,
         "red": true
       }
@@ -16,10 +18,12 @@
     "dev": {
       "url": "https://hooks.slack.com/services/hook2",
       "show_details": {
+		"green": true,
         "amber": true,
         "red": true
       },
       "show_actions": {
+		"green": true,
         "amber": true,
         "red": true
       }
@@ -58,7 +62,17 @@
               "text": ":large_green_circle: All systems are working properly"
             }
           }
-        ]
+        ],
+          "detail_blocks": [
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "*Metrics:*\n{{ range .Metrics }}{{ .DisplayName }} {{ .LastValue }}\n{{ end }}"
+              }
+            }
+          ]
+        }
       }
     },
     {
@@ -84,7 +98,21 @@
             "type": "section",
             "text": {
               "type": "mrkdwn",
-              "text": "{{ range .Metrics }}{{ .DisplayName }} {{ .LastValue }} > *{{ .Threshold }}*\n{{ end }}"
+              "text": "*Threshold exceeded metrics:*\n{{ range .Metrics }}{{ if and .Leverage .ThresholdExceeded }}{{ .DisplayName }} {{ .LastValue }} > *{{ .Threshold }}*\n{{ end }}{{ end }}"
+            }
+          },
+          {
+            "type": "section",
+            "text": {
+              "type": "mrkdwn",
+              "text": "*Other leverage metrics:*\n{{ range .Metrics }}{{ if and .Leverage (not .ThresholdExceeded) }}{{ .DisplayName }} {{ .LastValue }} < *{{ .Threshold }}*\n{{ end }}{{ end }}"
+            }
+          },
+          {
+            "type": "section",
+            "text": {
+              "type": "mrkdwn",
+              "text": "*Rest of metrics:*\n{{ range .Metrics }}{{ if not .Leverage }}{{ .DisplayName }} {{ .LastValue }}\n{{ end }}{{ end }}"
             }
           }
         ],
@@ -142,7 +170,21 @@
             "type": "section",
             "text": {
               "type": "mrkdwn",
-              "text": "{{ range .Metrics }}{{ .DisplayName }} {{ .LastValue }} > *{{ .Threshold }}*\n{{ end }}"
+              "text": "*Threshold exceeded metrics:*\n{{ range .Metrics }}{{ if and .Leverage .ThresholdExceeded }}{{ .DisplayName }} {{ .LastValue }} > *{{ .Threshold }}*\n{{ end }}{{ end }}"
+            }
+          },
+          {
+            "type": "section",
+            "text": {
+              "type": "mrkdwn",
+              "text": "*Other leverage metrics:*\n{{ range .Metrics }}{{ if and .Leverage (not .ThresholdExceeded) }}{{ .DisplayName }} {{ .LastValue }} < *{{ .Threshold }}*\n{{ end }}{{ end }}"
+            }
+          },
+          {
+            "type": "section",
+            "text": {
+              "type": "mrkdwn",
+              "text": "*Rest of metrics:*\n{{ range .Metrics }}{{ if not .Leverage }}{{ .DisplayName }} {{ .LastValue }}\n{{ end }}{{ end }}"
             }
           }
         ],

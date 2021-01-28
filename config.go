@@ -30,8 +30,10 @@ type NotificationLevel struct {
 }
 
 type Metric struct {
-	DisplayName string `json:"display_name"`
-	Query       string `json:"query"`
-	Threshold   string `json:"threshold"`
-	LastValue   string `json:"last_value"`
+	DisplayName       string `json:"display_name"`
+	Query             string `json:"query"`
+	Threshold         string `json:"threshold"`
+	LastValue         string `json:"last_value"`
+	Leverage          bool   `json:"leverage,omitempty"`
+	ThresholdExceeded bool   `json:"threshold_exceeded,omitempty"`
 }

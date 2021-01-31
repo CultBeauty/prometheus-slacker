@@ -67,7 +67,6 @@ func (n *SlackWebhook) SendMessage(msg SlackMessage) error {
 	if err != nil {
 		return errors.New("Failed to marshal Slack message: " + err.Error())
 	}
-	log.Print(string(payload))
 	res, err := http.Post(n.Url, "application/json", bytes.NewBuffer(payload))
 	if err != nil {
 		return errors.New("Failed to send Slack message - got error: " + err.Error())

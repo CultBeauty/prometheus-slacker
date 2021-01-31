@@ -40,7 +40,6 @@ func (ps *PrometheusSlacker) Run() int {
 		os.Exit(1)
 	}
 	ps.Init(os.Args[1])
-	log.Print(ps.config)
 	done := make(chan bool)
 	go ps.startHttpd()
 	<-done
@@ -116,8 +115,6 @@ func (ps *PrometheusSlacker) getCurrentLevelAndMetrics(metricsWithValues map[str
 	currentLevel := -1
 	levelMetrics := make(map[int]map[string]Metric)
 	for i, notificationLevel := range ps.config.NotificationLevels {
-		color := notificationLevel.Color
-
 		levelMetrics[i] = make(map[string]Metric)
 		metricThresholds := make(map[string]string)
 		thresholdExceededMetrics := make(map[string]bool)
@@ -137,7 +134,7 @@ func (ps *PrometheusSlacker) getCurrentLevelAndMetrics(metricsWithValues map[str
 			}
 			if leverage {
 				thresholdExceededMetrics[metric] = true
-				log.Print(fmt.Sprintf("%f <= %f so changing color to %s", threshold, metricsWithValues[metric].LastValue, color))
+				// log.Print(fmt.Sprintf("%f <= %f so changing color to %s", threshold, metricsWithValues[metric].LastValue, color))
 				currentLevel = i
 			}
 		}
@@ -156,14 +153,30 @@ func (ps *PrometheusSlacker) getCurrentLevelAndMetrics(metricsWithValues map[str
 			levelMetrics[i][name] = newMetric
 		}
 
-		log.Print(fmt.Sprintf("Current color is: %s\n", currentLevel))
+		// log.Print(fmt.Sprintf("Current color is: %s\n", currentLevel))
 	}
 	return currentLevel, levelMetrics
 }
 
+func (ps *PrometheusSlacker) newSlackMessage(srcMsg SlackMessage) SlackMessage {
+	msg := SlackMessage{}
+	b, err := json.Marshal(srcMsg)
+	if err != nil {
+		log.Print(fmt.Errorf("Error with Marshal slack msg from config: %w", err.Error()))
+		return msg
+	}
+
+	_ = json.Unmarshal(b, &msg)
+	if err != nil {
+		log.Print(fmt.Errorf("Error with Unmarshal slack msg from config: %w", err.Error()))
+	}
+
+	return msg
+}
+
 func (ps *PrometheusSlacker) getWebhookAndMsgForNotificationLevelSlackWebhooks(notificationLevel NotificationLevel, w string, levelMetrics map[string]Metric) (SlackWebhook, SlackMessage) {
 	webhook := ps.config.SlackWebhooks[w]
-	msg := notificationLevel.SlackMessage
+	msg := ps.newSlackMessage(notificationLevel.SlackMessage)
 	if webhook.ShowDetails[notificationLevel.Color] == true {
 		metrics := make([]Metric, 0)
 		if len(levelMetrics) > 0 {
@@ -257,7 +270,7 @@ func (ps PrometheusSlacker) GetMetricValue(metric string) (string, error) {
 	result := data["result"].([]interface{})
 	value := result[0].(map[string]interface{})["value"].([]interface{})
 	currentValStr := value[1].(string)
-	log.Print("Metric " + metric + " value " + currentValStr)
+	// log.Print("Metric " + metric + " value " + currentValStr)
 
 	return currentValStr, nil
 }
@@ -298,7 +311,7 @@ func (ps PrometheusSlacker) IsValueBiggerThanThreshold(val string, threshold str
 		log.Print("Error getting float from string for threshold val")
 	}
 
-	log.Print(fmt.Sprintf("Comparing %f and %f ...", compareVal, currentVal))
+	// log.Print(fmt.Sprintf("Comparing %f and %f ...", compareVal, currentVal))
 	if compareVal <= currentVal {
 		return true, nil
 	}

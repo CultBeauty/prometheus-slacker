@@ -213,32 +213,33 @@ func (ps *PrometheusSlacker) getWebhookAndMsgForNotificationLevelSlackWebhooks(n
 	return webhook, msg
 }
 
+func (ps *PrometheusSlacker) scrap() {
+	metricsWithValues := ps.getMetricValues()
+	if metricsWithValues == nil || len(metricsWithValues) == 0 {
+		return
+	}
+
+	currentLevel, levelMetrics := ps.getCurrentLevelAndMetrics(metricsWithValues)
+
+	if currentLevel < 0 {
+		return
+	}
+
+	for i, notificationLevel := range ps.config.NotificationLevels {
+		if i != currentLevel {
+			continue
+		}
+
+		for _, w := range notificationLevel.SlackWebhooks {
+			webhook, msg := ps.getWebhookAndMsgForNotificationLevelSlackWebhooks(notificationLevel, w, levelMetrics[i])
+			ps.sendMsg(webhook, msg)
+		}
+	}
+}
+
 func (ps *PrometheusSlacker) startScrapper() {
 	for {
-		metricsWithValues := ps.getMetricValues()
-		if metricsWithValues == nil || len(metricsWithValues) == 0 {
-			ps.sleep()
-			continue
-		}
-
-		currentLevel, levelMetrics := ps.getCurrentLevelAndMetrics(metricsWithValues)
-
-		if currentLevel < 0 {
-			ps.sleep()
-			continue
-		}
-
-		for i, notificationLevel := range ps.config.NotificationLevels {
-			if i != currentLevel {
-				continue
-			}
-
-			for _, w := range notificationLevel.SlackWebhooks {
-				webhook, msg := ps.getWebhookAndMsgForNotificationLevelSlackWebhooks(notificationLevel, w, levelMetrics[i])
-				ps.sendMsg(webhook, msg)
-			}
-		}
-
+		ps.scrap()
 		ps.sleep()
 		continue
 	}
@@ -246,7 +247,7 @@ func (ps *PrometheusSlacker) startScrapper() {
 
 func (ps *PrometheusSlacker) startApi() {
 	router := mux.NewRouter()
-	router.HandleFunc("/", ps.getHandler()).Methods("POST")
+	router.HandleFunc("/scrap", ps.getScrapHandler()).Methods("POST")
 	log.Print("Starting daemon listening on " + ps.config.Port + "...")
 	log.Fatal(http.ListenAndServe(":"+ps.config.Port, router))
 }
@@ -275,24 +276,9 @@ func (ps PrometheusSlacker) GetMetricValue(metric string) (string, error) {
 	return currentValStr, nil
 }
 
-func (ps *PrometheusSlacker) getHandler() func(http.ResponseWriter, *http.Request) {
+func (ps *PrometheusSlacker) getScrapHandler() func(http.ResponseWriter, *http.Request) {
 	fn := func(w http.ResponseWriter, r *http.Request) {
-		b, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		msg := SlackMessage{}
-		err = json.Unmarshal(b, &msg)
-		if err != nil {
-			http.Error(w, "Invalid payload", http.StatusBadRequest)
-			return
-		}
-
-		for _, s := range ps.config.SlackWebhooks {
-			_ = s.SendMessage(msg)
-		}
+		ps.scrap()
 
 		w.WriteHeader(http.StatusOK)
 		return
